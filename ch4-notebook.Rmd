@@ -1,0 +1,649 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+plot(cars)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+
+# Exercise 10
+```{r}
+library(ISLR)
+
+# Looking over data
+Weekly
+
+```
+```{r}
+pairs(Weekly)
+cor(Weekly[1:8],)
+```
+```{r}
+attach(Weekly)
+plot(Year, Volume)
+plot(Year, Today)
+```
+### 10a 
+We see a positive relationship between year and volume.
+For other pairs there does not appear to be a relationship (other than today and direction)
+
+### 10b
+```{r}
+logistic_regression <- glm(Direction ~ Lag1 + Lag2 + Lag3 + Lag4 + Lag5 + Volume, data = Weekly, family = binomial)
+summary(logistic_regression)
+```
+Lag 2 has a p-value of 0.0296, it is statistically significant
+
+Just to plot it out
+```{r}
+plot(Lag2, Direction)
+```
+
+### 10c
+Confusion matrix:
+```{r}
+weekly_probs <- predict(logistic_regression, type = "response")
+weekly_pred <- rep("Down", nrow(Weekly))
+contrasts(Direction)
+```
+```{r}
+weekly_pred[weekly_probs > 0.5] <- "Up"
+table(weekly_pred, Direction)
+```
+```{r}
+print(paste("Overall accuracy", as.character((54 + 557) / (54 + 48 + 430 + 557))))
+print(paste("Accuracy of \'Down\' predictions", as.character(54 / (54 + 48))))
+print(paste("Accuracy of \'Up\' predictions", as.character(557 / (557 + 430))))
+print(paste("Accuracy given \'Up\' is true value", as.character(557 / (557 + 48))))
+print(paste("Accuracy given \'Down\' is true value", as.character(54 / (430 + 54))))
+print(paste("Proportion of the time \'Up\' is predicted", as.character((430 + 557) / (54 + 430 + 48 + 557))))
+print(paste("Prior probability of \'Up\' (baseline)", as.character((48 + 557) / (54 + 430 + 48 + 557))))
+```
+We see overall accuracy of 56%. Of the times 'Down' is predicted, the prediction is correct ~53% of the time. Of the times 'Up' is predicted, the prediction is correct about ~56.4% of the time. When 'Up' is the true value for the response, the prediction has ~92% accuracy. When 'Down' is the true value for the response, the prediction has ~11.1% accuracy. This is because the model predicts 'Up' ~90.6% of the time
+
+### 10d
+```{r}
+train <- Year <= 2008
+direction_test <- Direction[!train]
+logistic_regression2 <- glm(Direction ~ Lag2, data = Weekly, family = binomial, subset = train)
+summary(logistic_regression2)
+
+```
+```{r}
+
+weekly_probs2 <- predict(logistic_regression2, 
+                         Weekly[!train,],type = "response")
+weekly_pred2 <- rep("Down", length(direction_test))
+weekly_pred2[weekly_probs2 > 0.5] <- "Up"
+table(weekly_pred2, direction_test)
+print(paste("Overall pred accuracy:", as.character((9+56)/(9+5+34+56))))
+```
+Overall prediction accuracy: 62.5%
+
+### 10e
+```{r}
+library(MASS)
+lda_weekly <- lda(Direction ~ Lag2, data = Weekly, subset = train)
+lda_weekly_pred <- predict(lda_weekly, 
+                         Weekly[!train,])
+lda_tbl <- table(lda_weekly_pred$class, direction_test)
+lda_tbl
+
+```
+```{r}
+paste("Overall accuracy:", as.character((lda_tbl[1] + lda_tbl[4]) /
+                                          (sum(lda_tbl[1:4]))))
+```
+
+### 10f
+```{r}
+qda_weekly <- qda(Direction ~ Lag2, data = Weekly, subset = train)
+qda_weekly_pred <- predict(qda_weekly, 
+                         Weekly[!train,])
+qda_tbl <- table(qda_weekly_pred$class, direction_test)
+qda_tbl
+```
+```{r}
+paste("Overall accuracy:", as.character((qda_tbl[1] + qda_tbl[4]) /
+                                          (sum(qda_tbl[1:4]))))
+```
+
+### 10g
+```{r}
+tbl_accuracy <- function(tbl) {
+  paste("Overall accuracy:", as.character((tbl[1] + tbl[4]) /
+                                          (sum(tbl[1:4]))))
+}
+
+library(class)
+
+standardized_lag2 <- scale(Lag2)
+train_x <- standardized_lag2[train,]
+test_x <- standardized_lag2[!train,]
+train_y <- Direction[train]
+test_y <- Direction[!train]
+
+dim(train_x) <- c(length(train_x),1)
+dim(test_x) <- c(length(test_x),1)
+set.seed(1)
+weekly_knn <- knn(train_x, test_x, train_y, k = 1)
+
+knn_tbl <- table(weekly_knn, direction_test)
+print(knn_tbl)
+print(tbl_accuracy(knn_tbl))
+```
+### 10h
+LDA and logistic regression appear to give the best results with a testing accuracy of 62.5%
+
+
+
+
+
+### 10l
+
+doing square of Lag2 for LDA
+```{r}
+library(magrittr)
+lda_weekly <- lda(Direction ~ I(Lag2^2), data = Weekly, subset = train)
+lda_weekly_pred <- predict(lda_weekly, 
+                         Weekly[!train,])
+lda_tbl <- table(lda_weekly_pred$class, direction_test)
+print(lda_tbl)
+tbl_accuracy(lda_tbl) %>% print
+```
+Combo of square and regular Lag2
+```{r}
+lda_weekly <- lda(Direction ~ Lag2 + I(Lag2^2), data = Weekly, subset = train)
+lda_weekly_pred <- predict(lda_weekly, 
+                         Weekly[!train,])
+lda_tbl <- table(lda_weekly_pred$class, direction_test)
+print(lda_tbl)
+tbl_accuracy(lda_tbl) %>% print
+```
+Still not as good as the 62.5%
+
+
+Trying 3NN
+```{r}
+set.seed(1)
+library(class)
+
+standardized_lag2 <- scale(Lag2)
+train_x <- standardized_lag2[train,]
+test_x <- standardized_lag2[!train,]
+train_y <- Direction[train]
+test_y <- Direction[!train]
+
+dim(train_x) <- c(length(train_x),1)
+dim(test_x) <- c(length(test_x),1)
+set.seed(1)
+weekly_knn <- knn(train_x, test_x, train_y, k = 3)
+
+knn_tbl <- table(weekly_knn, direction_test)
+print(knn_tbl)
+print(tbl_accuracy(knn_tbl))
+
+```
+
+Plotting accuracy with movement of k
+```{r}
+tbl_accuracy2 <- function(tbl) {
+  (tbl[1] + tbl[4]) / (sum(tbl[1:4]))
+}
+
+k_vals <- 1:30
+accuracies <- c()
+for (k in k_vals) {
+  standardized_lag2 <- scale(Lag2)
+  train_x <- standardized_lag2[train,]
+  test_x <- standardized_lag2[!train,]
+  train_y <- Direction[train]
+  test_y <- Direction[!train]
+  
+  dim(train_x) <- c(length(train_x),1)
+  dim(test_x) <- c(length(test_x),1)
+  set.seed(1)
+  weekly_knn <- knn(train_x, test_x, train_y, k = k)
+  
+  knn_tbl <- table(weekly_knn, direction_test)
+  accuracies <- c(accuracies, tbl_accuracy2(knn_tbl))
+}
+plot(k_vals, accuracies, xlab = "k", ylab = "Accuracy")
+
+```
+let's try k = 4
+```{r}
+set.seed(1)
+library(class)
+
+standardized_lag2 <- scale(Lag2)
+train_x <- standardized_lag2[train,]
+test_x <- standardized_lag2[!train,]
+train_y <- Direction[train]
+test_y <- Direction[!train]
+
+dim(train_x) <- c(length(train_x),1)
+dim(test_x) <- c(length(test_x),1)
+set.seed(1)
+weekly_knn <- knn(train_x, test_x, train_y, k = 4)
+
+knn_tbl <- table(weekly_knn, direction_test)
+print(knn_tbl)
+print(tbl_accuracy(knn_tbl))
+```
+So 4NN gets us a 61.5% test accuracy, about 1% worse than LDA
+
+LDA with Lag1^2 and Lag2
+```{r}
+lda_weekly <- lda(Direction ~ Lag2 + I(Lag1^2), data = Weekly, subset = train)
+lda_weekly_pred <- predict(lda_weekly, 
+                         Weekly[!train,])
+lda_tbl <- table(lda_weekly_pred$class, direction_test)
+print(lda_tbl)
+tbl_accuracy(lda_tbl) %>% print
+```
+So LDA with Lag2 and Lag1^2 gives 64.4% accuracy, the best so far
+
+```{r}
+lda_weekly <- lda(Direction ~ Lag2 + Lag4:Lag3, data = Weekly, subset = train)
+lda_weekly_pred <- predict(lda_weekly, 
+                         Weekly[!train,])
+lda_tbl <- table(lda_weekly_pred$class, direction_test)
+print(lda_tbl)
+tbl_accuracy(lda_tbl) %>% print
+```
+So here the combo of Lag2 and interaction of Lag4 and Lag3 gives ~65.4%
+
+# Exercise 11
+
+### 11a
+```{r}
+attach(Auto)
+mpg01 <- mpg > median(mpg)
+Auto1 <- cbind(Auto, mpg01)
+```
+
+### 11b
+```{r}
+pairs(Auto1)
+
+```
+```{r}
+cor(Auto1[-9])
+
+```
+Cylinders, displacement, and horsepower are most likely to be useful in predicting mpg01 because they are the most correlated relative to other variables. Mpg is obviously correlated, but the question implies it can't be used
+
+### 11c
+```{r}
+n_sample <- nrow(Auto1)
+test_size <- n_sample / 4
+test_filter <- rep(F, n_sample)
+test_filter[1:test_size] <- T
+
+test_set <- Auto1[test_filter,]
+train_set <- Auto1[!test_filter,]
+
+test_response <- Auto1$mpg01[test_filter]
+train_response <- Auto1$mpg01[!test_filter]
+
+nrow(test_set)
+nrow(train_set)
+```
+
+### 11d (LDA)
+```{r}
+lda_auto1 <- lda(mpg01 ~ cylinders + displacement + horsepower, data = Auto1, subset = !test_filter)
+lda_auto1_pred <- predict(lda_auto1, test_set)
+lda_auto1_tbl <- table(lda_auto1_pred$class, test_response)
+print(lda_auto1_tbl)
+tbl_accuracy(lda_auto1_tbl) %>% print
+
+
+
+```
+So test error rate is about 8.16%
+
+### 11e (QDA)
+```{r}
+qda_auto1 <- qda(mpg01 ~ cylinders + displacement + horsepower, data = Auto1, subset = !test_filter)
+qda_auto1_pred <- predict(qda_auto1, test_set)
+qda_auto1_tbl <- table(qda_auto1_pred$class, test_response)
+qda_auto1_tbl
+tbl_accuracy(qda_auto1_tbl) %>% print
+```
+So test error rate is about 8.16%
+
+### 11f (logistic regression)
+```{r}
+lr_auto1 <- glm(mpg01 ~ cylinders + displacement + horsepower, data = Auto1, family = binomial, subset = !test_filter)
+
+lr_auto1_probs <- predict(lr_auto1, test_set)
+lr_auto1_pred <- rep("Down", length(test_set))
+lr_auto1_pred[lr_auto1_probs > 0.5] <- "Up"
+
+lr_auto1_tbl <- table(lr_auto1_pred, test_response)
+lr_auto1_tbl
+tbl_accuracy(lr_auto1_tbl) %>% print
+
+```
+Test error is about 16.6%
+
+### 11g (KNN)
+```{r}
+tbl_accuracy2 <- function(tbl) {
+  (tbl[1] + tbl[4]) / (sum(tbl[1:4]))
+}
+
+k_vals <- 1:20
+accuracies <- c()
+
+standard_features <- data.frame(cylinders = Auto1$cylinders,
+                                displacement = Auto1$displacement,
+                                horsepower = Auto1$horsepower)
+
+standard_features$cylinders <- scale(standard_features$cylinders)
+standard_features$displacement <- scale(standard_features$displacement)
+standard_features$horsepower <- scale(standard_features$horsepower)
+
+train_set <- standard_features[!test_filter,]
+test_set <- standard_features[test_filter,]
+
+train_response <- Auto1$mpg01[!test_filter]
+test_response <- Auto1$mpg01[test_filter]
+
+for (k in k_vals) {
+  set.seed(1)
+  temp_knn <- knn(train = train_set, test = test_set, cl = train_response, k = k)
+
+  knn_tbl <- table(temp_knn,test_response)
+  accuracies <- c(accuracies, tbl_accuracy2(knn_tbl))
+}
+plot(k_vals, accuracies, xlab = "k", ylab = "Accuracy")
+
+
+
+```
+Looks like k=3 is the best choice
+```{r}
+set.seed(1)
+temp_knn <- knn(train = train_set, test = test_set, cl = train_response, k = 3)
+
+knn_tbl <- table(temp_knn,test_response)
+knn_tbl
+tbl_accuracy(knn_tbl) %>% print()
+```
+This gives us a test error rate of 7.14%
+
+# Exercise 12
+
+### 12a
+```{r}
+Power <- function() {
+  print(2^3)
+}
+
+```
+
+### 12b
+```{r}
+Power2 <- function(x, a) {
+  print(x^a)
+}
+
+Power2(3, 8)
+```
+
+### 12c
+```{r}
+Power2(10, 3)
+Power2(8, 17)
+Power2(131, 3)
+
+```
+
+### 12d, 12e
+```{r}
+Power3 <- function(x, a) {
+  return(x^a)
+}
+plot(Power3(1:10, 2), xlab = "x", ylab = "y", 
+     main = "Plot of x^2", log="xy")
+```
+
+### 12f
+```{r}
+PlotPower <- function(x, a) {
+  plot(Power3(x, a), xlab = "x", ylab = "y", 
+     main = "Plot of x^2")
+}
+PlotPower(1:10, 3)
+```
+
+# Exercise 13
+Predicting whether a given suburb has a crime rate above or below the median
+```{r}
+crime_med <- Boston$crim > median(Boston$crim)
+Boston1 <- cbind(Boston, crime_med)
+Boston1
+pairs(Boston)
+cor(Boston1)
+```
+
+Splitting into train and test sets
+```{r}
+
+# shuffling
+Boston1[sample(1:nrow(Boston1)), ]
+
+n_obs <- nrow(Boston1)
+n_test <- n_obs / 2 
+test_filter <- rep(F, n_obs)
+test_filter[1:n_test] <- T
+
+train_x <- Boston1[!test_filter,]
+train_y <- Boston1$crime_med[!test_filter]
+
+test_x <- Boston1[test_filter,]
+test_y <- Boston1$crime_med[test_filter]
+```
+
+
+Looks like indus, nox, age, dis, rad, tax have most correlation with crime_med
+### Logistic regression
+```{r}
+
+
+lr_boston <- glm(crime_med ~ indus + nox + rad + tax + dis + age, 
+                 data = Boston1, family = binomial, subset = !test_filter)
+summary(lr_boston)
+```
+
+```{r}
+
+lr_boston_probs <- predict(lr_boston, test_x)
+lr_boston_pred <- rep(F, n_test)
+lr_boston_pred[lr_boston_probs > 0.5] <- T
+
+lr_boston_tbl <- table(lr_boston_pred, test_y)
+lr_boston_tbl
+tbl_accuracy(lr_boston_tbl) %>% print
+
+```
+
+Plotting different predictors against response to see if there is nonlinearity
+```{r}
+plot(Boston1$age, Boston1$crim)
+plot(Boston1$dis, Boston1$crim)
+plot(Boston1$rad, Boston1$crim)
+plot(Boston1$nox, Boston1$crim)
+plot(Boston1$indus, Boston1$crim)
+```
+
+Trying quadratic transforms for different parameters
+```{r}
+lr_boston <- glm(crime_med ~ indus + nox + rad + tax + dis + I(age^2), 
+                 data = Boston1, family = binomial, subset = !test_filter)
+lr_boston_probs <- predict(lr_boston, test_x)
+lr_boston_pred <- rep(F, n_test)
+lr_boston_pred[lr_boston_probs > 0.5] <- T
+
+lr_boston_tbl <- table(lr_boston_pred, test_y)
+lr_boston_tbl
+tbl_accuracy(lr_boston_tbl) %>% print
+```
+```{r}
+lr_boston <- glm(crime_med ~ indus + nox + rad + tax + I(dis^2) + age, 
+                 data = Boston1, family = binomial, subset = !test_filter)
+lr_boston_probs <- predict(lr_boston, test_x)
+lr_boston_pred <- rep(F, n_test)
+lr_boston_pred[lr_boston_probs > 0.5] <- T
+
+lr_boston_tbl <- table(lr_boston_pred, test_y)
+lr_boston_tbl
+tbl_accuracy(lr_boston_tbl) %>% print
+```
+
+```{r}
+lr_boston <- glm(crime_med ~ indus + I(nox^2) + rad + tax + dis + age, 
+                 data = Boston1, family = binomial, subset = !test_filter)
+lr_boston_probs <- predict(lr_boston, test_x)
+lr_boston_pred <- rep(F, n_test)
+lr_boston_pred[lr_boston_probs > 0.5] <- T
+
+lr_boston_tbl <- table(lr_boston_pred, test_y)
+lr_boston_tbl
+tbl_accuracy(lr_boston_tbl) %>% print
+```
+```{r}
+lr_boston <- glm(crime_med ~ indus + nox + rad + I(tax^2) + dis + age, 
+                 data = Boston1, family = binomial, subset = !test_filter)
+lr_boston_probs <- predict(lr_boston, test_x)
+lr_boston_pred <- rep(F, n_test)
+lr_boston_pred[lr_boston_probs > 0.5] <- T
+
+lr_boston_tbl <- table(lr_boston_pred, test_y)
+lr_boston_tbl
+tbl_accuracy(lr_boston_tbl) %>% print
+```
+```{r}
+lr_boston <- glm(crime_med ~ indus + nox + I(rad^2) + tax + dis + age, 
+                 data = Boston1, family = binomial, subset = !test_filter)
+lr_boston_probs <- predict(lr_boston, test_x)
+lr_boston_pred <- rep(F, n_test)
+lr_boston_pred[lr_boston_probs > 0.5] <- T
+
+lr_boston_tbl <- table(lr_boston_pred, test_y)
+lr_boston_tbl
+tbl_accuracy(lr_boston_tbl) %>% print
+```
+```{r}
+lr_boston <- glm(crime_med ~ I(indus^2) + nox + rad + tax + dis + age, 
+                 data = Boston1, family = binomial, subset = !test_filter)
+lr_boston_probs <- predict(lr_boston, test_x)
+lr_boston_pred <- rep(F, n_test)
+lr_boston_pred[lr_boston_probs > 0.5] <- T
+
+lr_boston_tbl <- table(lr_boston_pred, test_y)
+lr_boston_tbl
+tbl_accuracy(lr_boston_tbl) %>% print
+```
+
+
+So tax is the only param where squaring it improves overall test accuracy (by ~6%)
+
+```{r}
+lr_boston <- glm(crime_med ~ indus + nox + rad + I(tax^2) + dis + age + black + zn, 
+                 data = Boston1, family = binomial, subset = !test_filter)
+lr_boston_probs <- predict(lr_boston, test_x)
+lr_boston_pred <- rep(F, n_test)
+lr_boston_pred[lr_boston_probs > 0.5] <- T
+
+lr_boston_tbl <- table(lr_boston_pred, test_y)
+lr_boston_tbl
+tbl_accuracy(lr_boston_tbl) %>% print
+```
+Best accuracy so far for logistic regression is ~87%
+
+### LDA
+```{r}
+lda_boston <- lda(crime_med ~ indus + nox + rad + I(tax^2) + dis + age + black + zn, data = Boston1, subset = !test_filter)
+lda_boston_pred <- predict(lda_boston, test_x)
+lda_boston_tbl <- table(lda_boston_pred$class, test_y)
+print(lda_boston_tbl)
+tbl_accuracy(lda_boston_tbl) %>% print
+
+
+```
+Interesting: we see a ~12.5% difference between logistic regression and lda for the same parameter configuration
+This could be because LDA performs better when parameters are gaussian
+The charts below indicate that some of the parameters are not close to a normal distribution
+
+```{r}
+hist(Boston1$indus)
+hist(Boston1$nox)
+hist(Boston1$rad)
+hist(Boston1$tax)
+hist(Boston1$dis)
+hist(Boston1$age)
+hist(Boston1$black)
+hist(Boston1$zn)
+```
+
+
+### KNN
+```{r}
+
+k_vals <- 1:30
+accuracies <- c()
+
+Boston2 <- data.frame(
+                      nox = Boston1$nox,
+                      tax = Boston1$tax)
+
+for (i in 1:length(Boston2)) {
+  Boston2[i] <- Boston2[i] %>% scale
+}
+
+train_x <- Boston2[!test_filter,]
+train_y <- Boston1$crime_med[!test_filter]
+test_x <- Boston2[test_filter,]
+test_y <- Boston1$crime_med[test_filter]
+
+for (k in k_vals) {
+  set.seed(1)
+  temp_knn <- knn(train = train_x, test = test_x, cl = train_y, k = k)
+
+  knn_tbl <- table(temp_knn, test_y)
+  accuracies <- c(accuracies, tbl_accuracy2(knn_tbl))
+}
+plot(k_vals, accuracies, xlab = "k", ylab = "Accuracy")
+```
+
+So we see high accuracy at k = 21
+
+```{r}
+
+boston_21nn <- knn(train = train_x, test = test_x, cl = train_y, k = 21)
+boston_21nn_tbl <- table(boston_21nn, test_y)
+boston_21nn_tbl
+tbl_accuracy(boston_21nn_tbl) %>% print
+```
+So 21NN gets around ~86.6% accuracy
+
+
+
+
+
